@@ -284,5 +284,5 @@ router.post('/getGJLevels(21|20)?(.php)?', (req, res) => {
     resString += Utils.genMulti(lvlsMultiString);
     let a = fs.readFileSync('testSearch.txt', { encoding: "utf8" })
     res.send(resString);
-});
+}); 
 module.exports = { route: router, path: "/" };
