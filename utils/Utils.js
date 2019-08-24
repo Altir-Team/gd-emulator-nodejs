@@ -42,7 +42,7 @@ module.exports = class Utils {
             hash = [];
         for (let i of lvlsArray) {
             if(!this.isNumeric(i)) return "-1";
-            let asd = global.database.prepare("SELECT * FROM levels WHERE levelID = ?").all(Number(i)),
+            let asd = global.database.prepare("SELECT * FROM levels WHERE levelID = ?").all(String(i)),
                 res = asd[0];
             let levelString = res.levelString;
             if(!fs.existsSync(`data/levels/${i}`)) {
@@ -52,5 +52,25 @@ module.exports = class Utils {
             hash.push(String(res.levelID)[0] + String(res.levelID).slice(String(res.levelID).length - 1) + (String(res.starStars) || '0') + (String(res.coins) || '0'));
         }
         return crypto.createHash('sha1').update(hash.join('') + `xI25fpAapCQg`).digest('hex');
+    }
+    static genSolo (string) {
+        let hash = "",
+            len = string.length,
+            divided = parseInt(len / 40),
+            p = 0;
+            for (let i = 0; i < len; i += divided) {
+                if (p > 39) break;
+                hash += string[i];
+                p++;
+            }
+        return crypto.createHash('sha1').update(hash + `xI25fpAapCQg`).digest('hex');
+    }
+    static genSolo2 (string) {
+        let asd = crypto.createHash('sha1').update(string + `xI25fpAapCQg`).digest('hex');
+        return asd;
+    }
+    static getExtID (ID) {
+        let res = global.database.prepare("SELECT * FROM users WHERE userID = ?").all(ID);
+        return (res.length && this.isNumeric(res[0])) ? res[0].extID : 0;
     }
 }

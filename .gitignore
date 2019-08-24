@@ -95,3 +95,4 @@ typings/
 # Data
 data/accounts/*
 data/levels/*
+*.md
