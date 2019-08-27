@@ -19,6 +19,10 @@ module.exports = class Utils {
         let asd = global.database.prepare('SELECT * FROM accounts WHERE userName = ? AND password = ?').all(username, password);
         return asd.length ? true : false;
     }
+    static isValidID (ID) {
+        let asd = global.database.prepare('SELECT * FROM accounts WHERE id = ?').all(ID);
+        return asd.length ? true : false;
+    }
     static isNumeric (i) {
         return !isNaN(i);
     }
@@ -34,8 +38,8 @@ module.exports = class Utils {
     static getUserString (ID) {
         let users = global.database.prepare("SELECT * FROM users WHERE userID = ?").all(ID),
             userData = users[0];
-        let extID = this.isNumeric(userData.extID) ? userData.extID : 0;
-        return `${ID}:${userData.username}:${Number(extID)}`;
+        let extID = (userData && userData.extID) ? this.isNumeric(userData.extID) ? userData.extID : 0 : 0;
+        return `${ID}:${(userData && userData.username) ? userData.username : ''}:${Number(extID)}`;
     }
     static genMulti (string) {
         let lvlsArray = string.filter(x => x !== ""),

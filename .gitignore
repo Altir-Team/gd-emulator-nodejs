@@ -95,4 +95,6 @@ typings/
 # Data
 data/accounts/*
 data/levels/*
+data/music/*
 *.md
+views

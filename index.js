@@ -11,6 +11,7 @@ global.database = connection;
 app.use(bodyParser.raw())
 .use(bodyParser.urlencoded({ extended: true }))
 .use(express.static(path.join(__dirname, 'data')))
+.set('view engine', 'ejs');
 fs.readdir('routes', (_err, files) => {
     files.forEach(x => {
         let a = require(`./routes/${x}`);
