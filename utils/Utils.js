@@ -27,7 +27,7 @@ module.exports = class Utils {
         return !isNaN(i);
     }
     static getSongString (ID) {
-        let songs = global.database.prepare(`SELECT * FROM songs WHERE ID = ?`).all(ID);
+        let songs = global.database.prepare(`SELECT * FROM songs WHERE ID = ?`).all(String(ID));
         if (!songs.length) return false;
         let song = songs[0];
         if (song.isDisabled == 1) return false;
@@ -76,5 +76,10 @@ module.exports = class Utils {
     static getExtID (ID) {
         let res = global.database.prepare("SELECT * FROM users WHERE userID = ?").all(ID);
         return (res.length && this.isNumeric(res[0])) ? res[0].extID : 0;
+    }
+    static isValidID (id, pass) {
+        let asd = global.database.prepare('SELECT * FROM accounts WHERE id = ?').all(id);
+        if (!asd.length) return false;
+        return this.isValid(asd[0].username, pass);
     }
 }

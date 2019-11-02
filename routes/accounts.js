@@ -12,7 +12,7 @@ router.post('/registerGJAccount(.php)?', (req, res) => {
     let msq1 = global.database.prepare('SELECT * FROM accounts WHERE email = ?').all(email);
     //if(msq1.length) return res.send('есть такое мыло');
     global.database.prepare(`INSERT INTO accounts (username, password, email, secret, registerDate) VALUES (?, ?, ?, ?, ?)`)
-    .run(username, password, email, req.body.secret, String(Date.now()));
+    .run(username, password, email, req.body.secret, String(parseInt(Date.now() / 1000)));
     res.send('1');
 });
 router.post('/loginGJAccount(.php)?', (req, res) => {
@@ -35,6 +35,7 @@ router.post('/loginGJAccount(.php)?', (req, res) => {
             userID = msq3[0].userID;
             //перенос уровней через userID, extID
         }
+        global.database.prepare('INSERT INTO actions (type, value, timestamp, value2) VALUES (?, ?, ?, ?)').run(2, username, parseInt(Date.now() / 1000), req.headers['x-forwarded-for'] || req.connection.remoteAddress);
         res.send(`${id},${userID}`);
         if(!isNaN(udid)) {
             let q1 = global.database.prepare('SELECT * FROM users WHERE extID = ?').all(udid);

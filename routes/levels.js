@@ -1,7 +1,7 @@
 'use strict';
 let express = require('express'),
     router = express.Router(),
-    { exploitPatch, Utils, XOR } = require('../utils'),
+    { exploitPatch, Utils, XOR, GJPCheck } = require('../utils'),
     { remove, numcolon, numbers } = exploitPatch,
     fs = require('fs'),
     zlib = require('zlib'),
@@ -16,6 +16,7 @@ router.post('/uploadGJLevel21(.php)?', (req, res) => {
         userName = remove(vars.userName),
         levelID = remove(vars.levelID),
         levelName = remove(vars.levelName),
+        gjp = remove(vars.gjp),
         levelDesc = gameVersion < 20 ? Buffer.from(remove(vars.levelDesc)).toString('base64') : remove(vars.levelDesc),
         levelVersion = remove(vars.levelVersion),
         levelLength = remove(vars.levelLength),
@@ -38,18 +39,25 @@ router.post('/uploadGJLevel21(.php)?', (req, res) => {
         let id = remove(vars.udid);
         if (!isNaN(id)) return res.send('-1');
     }
+    if (vars.accountID && vars.accountID.length && vars.accountID !== "0") {
+        id = remove(vars.accountID);
+        let gjpres = GJPCheck.check(gjp, id);
+        if (!gjpres) return res.send('-1');
+    }
     let userID = Utils.getUserID(id, userName),
-        uploadDate = String(Date.now());
-    //сделать cd (cooldown)
+        uploadDate = String(parseInt(Date.now() / 1000)),
+        hostname = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    let cdCheck = global.database.prepare('SELECT * FROM levels WHERE uploadDate > ? AND (userID = ? OR hostname = ?)').all(uploadDate - 60, userID, hostname);
+    if (cdCheck > 0) return res.send('-1');
     if (levelString !== "" && levelName !== "") {
         let levels = global.database.prepare('SELECT * FROM levels WHERE levelID = ? AND userID = ?').all(levelID, userID);
         if (levels.length) {
             global.database.prepare('UPDATE levels SET levelName = ?, gameVersion = ?, binaryVersion = ?, userName = ?, ' +
             'levelDesc = ?, levelVersion = ?, levelLength = ?, audioTrack = ?, auto = ?, password = ?, original = ?, twoPlayer = ?, ' +
             'songID = ?, objects = ?, coins = ?, requestedStars = ?, extraString = ?, levelString = ?, levelInfo = ?, secret = ?, ' +
-            'updateDate = ?, unlisted = ?, isLDM = ? WHERE levelID = ? AND extID = ?').run(levelName, gameVersion, binaryVersion, userName,
+            'updateDate = ?, unlisted = ?, isLDM = ?, hostname = ? WHERE levelID = ? AND extID = ?').run(levelName, gameVersion, binaryVersion, userName,
                 levelDesc, levelVersion, levelLength, audioTrack, auto, password, original, twoPlayer, songID, objects, coins, requestedStars,
-                extraString, levelString, levelInfo, secret, uploadDate, unlisted, ldm, levelID, id);
+                extraString, levelString, levelInfo, secret, uploadDate, unlisted, ldm, hostname, levelID, id);
             fs.writeFile(`data/levels/${levelID}`, levelString, (err) => {
                 if (err) console.log(err);
                 res.send(`${levelID}`);
@@ -57,11 +65,11 @@ router.post('/uploadGJLevel21(.php)?', (req, res) => {
         } else {
             let query = global.database.prepare("INSERT INTO levels (levelName, gameVersion, binaryVersion, userName, levelDesc, levelVersion, " +
             "levelLength, audioTrack, auto, password, original, twoPlayer, songID, objects, coins, requestedStars, extraString, " +
-            "levelString, levelInfo, secret, uploadDate, userID, extID, updateDate, unlisted, isLDM)" +
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            "levelString, levelInfo, secret, uploadDate, userID, extID, updateDate, unlisted, isLDM, hostname)" +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
                 .run(levelName, gameVersion, binaryVersion, userName,
                     levelDesc, levelVersion, levelLength, audioTrack, auto, password, original, twoPlayer, songID, objects, coins, requestedStars,
-                    extraString, levelString, levelInfo, secret, uploadDate, userID, id, uploadDate, unlisted, ldm);
+                    extraString, levelString, levelInfo, secret, uploadDate, userID, id, uploadDate, unlisted, ldm, hostname);
             levelID = query.lastInsertRowid;
             fs.writeFile(`data/levels/${levelID}`, levelString, (err) => {
                 if (err) console.log(err);
@@ -182,7 +190,7 @@ router.post('/getGJLevels(21|20)?(.php)?', (req, res) => {
     if (type == 1) order = 'downloads DESC';
     if (type == 2) order = 'likes DESC';
     if (type == 3) { // тренды
-        let uploadDate = Date.now() - (7 * 24 * 60 * 60);
+        let uploadDate = (Date.now() / 1000) - (7 * 24 * 60 * 60);
         params.push(`uploadDate > ${uploadDate}`);
         order = "likes";
     }
@@ -212,7 +220,12 @@ router.post('/getGJLevels(21|20)?(.php)?', (req, res) => {
         params.push(`extID IN (${followed})`);
     }
     if (type == 13) {  // друзья 
-        
+        let accountID = remove(vars.accountID),
+            gjp = remove(vars.gjp),
+            gjpres = GJPCheck.check(gjp, accountID);
+        if (gjpres) {
+            // получаем друзей и вставляем в фильтр
+        }
     }
     let querybase = "FROM levels";
     if (params.length) querybase += ` WHERE (${params.join(' ) AND (')})`;
@@ -259,25 +272,30 @@ router.post('/downloadGJLevel(19|20|21|22)?(.php)?', (req, res) => {
     if(isNaN(levelID)) return res.send('-1');
     switch (levelID) {
         case -1:
-            let asd = global.database.prepare('SELECT * FROM dailyFeatures WHERE timestamp < ? AND type = 0 ORDER BY DESC LIMIT 1').all(Date.now());
+            let asd = global.database.prepare('SELECT * FROM dailyFeatures WHERE timestamp < ? AND type = 0 ORDER BY DESC LIMIT 1').all(parseInt(Date.now() / 1000));
             let lvl = asd[0];
             levelID = lvl.levelID;
             feaID = lvl.feaID + 100001;
             daily = 1;
             break;
         case -2:
-            let asdf = global.database.prepare('SELECT * FROM dailyFeatures WHERE timestamp < ? AND type = 1 ORDER BY DESC LIMIT 1').all(Date.now());
+            let asdf = global.database.prepare('SELECT * FROM dailyFeatures WHERE timestamp < ? AND type = 1 ORDER BY DESC LIMIT 1').all(parseInt(Date.now() / 1000));
             let lvll = asdf[0];
             levelID = lvl.levelID;
             feaID = lvll.feaID + 100001;
             daily = 1;
             break;
     }
-    let levels = global.database.prepare('SELECT * FROM levels WHERE levelID = ?').all(String(levelID));
+    let levels = global.database.prepare('SELECT * FROM levels WHERE levelID = ?').all(levelID);
     if(levels.length) {
-        let lvl = levels[0];
+        let lvl = levels[0],
+        ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+        let cdCheck = global.database.prepare('SELECT * FROM actions WHERE type = ? AND value = ? AND value2 = ?').all(7, levelID, ip);
+        if (!cdCheck.length) {
+            global.database.prepare('UPDATE levels SET downloads = downloads + 1 WHERE levelID = ?').run(levelID);
+            global.database.prepare('INSERT INTO actions (type, value, timestamp, value2) VALUES (?, ?, ?, ?)').run(7, levelID, parseInt(Date.now() / 1000), ip);
+        }
         // Сделать только одно скачивание на юзера/ip
-        global.database.prepare('UPDATE levels SET downloads = downloads + 1 WHERE levelID = ?').run(String(levelID));
         let uploadDate = moment(lvl.uploadDate).fromNow(),
             updateDate = moment(lvl.updateDate).fromNow(),
             { password, levelDesc: description } = lvl,

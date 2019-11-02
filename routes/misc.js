@@ -1,8 +1,8 @@
 'use strict';
 let express = require('express'),
     router = express.Router(),
-    { exploitPatch, Utils } = require('../utils'),
-    { remove } = exploitPatch,
+    { exploitPatch, GJPCheck, Utils } = require('../utils'),
+    { remove, numbers } = exploitPatch,
     fetch = require('node-fetch');
 router.post('/getGJSongInfo(.php)?', (req, res) => {
     let vars = req.body;
@@ -12,14 +12,15 @@ router.post('/getGJSongInfo(.php)?', (req, res) => {
         songString = (id, name, aid, aname, ssize, dl) => `1~|~${id}~|~2~|~${name}~|~3~|~${aid}~|~4~|~${aname}~|~5~|~${ssize}~|~6~|~~|~10~|~${dl}~|~7~|~`;
     if (!songs.length) return new Promise((resolve, _reject) => {
         fetch(`https://www.newgrounds.com/audio/listen/${songID}`).then(x => x.text()).then(x => {
-            if (x.match(/<title>(.*)<\/title>/)[1] == "Whoops, that's a swing and a miss!") resolve(res.send('-1'));
-            let songName = x.match(/<title>(.*)<\/title>/)[1],
-                downloadLink = x.match(/(?:\w+:)?\/\/[^/]+([^?#]+)/g).filter(c => c.includes('audio.ngfiles.com'))[0].slice(67).replace(/\\/g, ''),
-                author = x.match(/"artist":"(.*?)"/g)[0].slice(10, -1);
+            let songName = x.match(/<title>(.*)<\/title>/)[1];
+            if (songName == "Whoops, that's a swing and a miss!") return resolve(res.send('-1'));
+                let downloadLink = x.match(/(?:\w+:)?\/\/[^/]+([^?#]+)/g).filter(c => c.includes('audio.ngfiles.com'))[0],
+                    author = x.match(/"artist":"(.*?)"/g)[0].slice(10, -1);
+                downloadLink = downloadLink.slice(67).replace(/\\/g, '');
             fetch(downloadLink).then(c => {
-                let size = (c.headers.get('Content-Length') / 1000000).toFixed(2);
+                let size = (c.headers.get('Content-Length') / 1048576).toFixed(2);
                 global.database.prepare('INSERT INTO songs (ID, name, authorID, authorName, size, download, isDisabled) VALUES (?, ?, ?, ?, ?, ?, ?)').run(songID, songName, '1', author, size, downloadLink, '0');
-                resolve(res.send(songString(songID, songName, '1', author, size, downloadLink)));
+                return resolve(res.send(songString(songID, songName, '1', author, size, downloadLink)));
             });
         });
     });
@@ -28,5 +29,59 @@ router.post('/getGJSongInfo(.php)?', (req, res) => {
     let dlLink = song.download;
     if (dlLink.indexOf(':') !== "-1") dlLink = encodeURIComponent(dlLink);
     return res.send(songString(songID, song.name, song.authorID, song.authorName, song.size, song.download));
+});
+
+router.post('/updateGJUserScore(22)?(.php)?', (req, res) => {
+    let vars = req.body,
+        gameVersion = (vars.gameVersion && vars.gameVersion.length) ? remove(vars.gameVersion[0]) : 1,
+        coins = (vars.coins && vars.coins.length) ? remove(vars.coins) : 0;
+    if (!vars.username || !vars.secret || !vars.stars || !vars.demons || !vars.icon || !vars.color1 || !vars.color2) return res.send('-1');
+    let username = remove(vars.username),
+        secret = remove(vars.secret),
+        stars = remove(vars.stars),
+        demons = remove(vars.demons),
+        icon = remove(vars.icon),
+        color1 = remove(vars.color1),
+        color2 = remove(vars.color2),
+        iconType = (vars.iconType && vars.iconType.length) ? remove(vars.iconType) : 0,
+        userCoins = (vars.userCoins && vars.userCoins) ? remove(vars.userCoins) : 0,
+        special = (vars.special && vars.special.length) ? remove(vars.special) : 0,
+        accIcon = (vars.accIcon && vars.accIcon) ? remove(vars.accIcon) : 0,
+        accShip = (vars.accShip && vars.accShip) ? remove(vars.accShip) : 0,
+        accBall = (vars.accBall && vars.accBall) ? remove(vars.accBall) : 0,
+        accBird = (vars.accBird && vars.accBird) ? remove(vars.accBird) : 0,
+        accDart = (vars.accDart && vars.accDart) ? remove(vars.accDart) : 0,
+        accRobot = (vars.accRobot && vars.accRobot) ? remove(vars.accRobot) : 0,
+        accGlow = (vars.accGlow && vars.accGlow) ? remove(vars.accGlow) : 0,
+        accSpider = (vars.accSpider && vars.accSpider) ? remove(vars.accSpider) : 0,
+        accExplosion = (vars.accExplosion && vars.accExplosion) ? remove(vars.accExplosion) : 0,
+        diamonds = (vars.diamonds && vars.diamonds) ? remove(vars.diamonds) : 0,
+        id = "";
+    if ((!vars.udid || !vars.udid.length) && (!vars.accountID || !vars.accountID.length)) return res.send('-1');
+    if (vars.udid && vars.udid.length) {
+        id = remove(vars.udid);
+        if (Utils.isNumeric(id)) return res.send('-1');
+    }
+    if ((vars.udid && vars.udid.length) && vars.accountID !== '0') {
+        id = remove(vars.accountID);
+        let gjp = remove(vars.gjp),
+            gjpres = GJPCheck.check(gjp, id);
+        if (!gjpres) return res.send('-1');
+    }
+    let userID = Utils.getUserID(id, username);
+    let uploadDate = parseInt(Date.now() / 1000),
+        hostname = req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+        diff = global.database.prepare('SELECT * FROM users WHERE userID = ? LIMIT 1').all(userID);
+    diff = diff[0];
+    let starsDiff = stars - diff.stars,
+        coinDiff = coins - diff.coins,
+        demonDiff = demons - diff.demons,
+        uscDiff = userCoins - diff.userCoins,
+        dimDiff = diamonds - diff.diamonds;
+    global.database.prepare('INSERT INTO actions (type, value, timestamp, account, value2, value3, value4, value5) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(9, starsDiff, parseInt(Date.now() / 1000), userID, coinDiff, demonDiff, uscDiff, dimDiff);
+    global.database.prepare('UPDATE users SET gameVersion = ?, username = ?, coins = ?, secret = ?, stars = ?, demons = ?, icon = ?, color1 = ?, color2 = ?, iconType = ?, userCoins = ?, special = ?, accIcon = ?, accShip = ?, accBall = ?, accBird = ?, accDart = ?, accRobot = ?, accGlow = ?, IP = ?, lastPlayed = ?, accSpider = ?, accExplosion = ?, diamonds = ? WHERE userID = ?')
+        .run(gameVersion, username, coins, secret, stars, demons, icon, color1, color2, iconType, userCoins, special, accIcon, accShip, accBall, accBird, accDart, accRobot, accGlow, hostname, uploadDate, accSpider, accExplosion, diamonds, userID);
+    res.send(`${userID}`);
 });
 module.exports = { route: router, path: "/" };

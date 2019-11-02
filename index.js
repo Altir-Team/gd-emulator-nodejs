@@ -5,7 +5,10 @@ let express = require('express'),
     SQLite = require('better-sqlite3'),
     connection = new SQLite("gd.db", { verbose: console.log, fileMustExist: true }),
     fs = require('fs'),
-    path = require('path');
+    path = require('path'),
+    multer = require('multer'),
+    storage = multer.memoryStorage(),
+    upload = multer({ storage, limits: { fileSize: 15728640 } }).single('track');
 global.path = '/sdfsdfsd';
 global.database = connection;
 app.use(bodyParser.raw())
@@ -18,8 +21,22 @@ fs.readdir('routes', (_err, files) => {
         app.use(`${global.path + a.path}`, a.route);
     });
 });
+app.get('/test', (req, res) => {
+    res.render('test');
+})
+app.post('/test', (req, res) => {
+    upload(req, res, (err) => {
+        if (err instanceof multer.MulterError) {
+            console.log(err);
+            return res.send('<span style="color: red;">An error has occurred with module. Try again later</span>');
+        } else {
+            console.log(req.file);
+            return res.send('wait...');
+        }
+    });
+})
 app.use((req, res, next) => {
-    console.log(req.url, ' - ', req.body);
+    console.log(`[${req.method.toUpperCase()}]`, req.url, ' - ', req.body);
     next();
 })
 .listen(8080, () => console.log('ok'));
