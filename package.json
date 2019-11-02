@@ -6,6 +6,10 @@
   "scripts": {
     "run": "node index.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Altir-Team/gd-emulator-nodejs.git"
+  },
   "author": "bit0r1n",
   "license": "ISC",
   "dependencies": {
